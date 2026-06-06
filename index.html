@@ -93,10 +93,7 @@
         <div class="field"><label>額面年収<span class="unit">万円</span></label><input type="number" id="grossIncome" value="500"></div>
         <div class="field"><label>毎月の生活費<span class="unit">万円</span></label><input type="number" id="livingMonthly" value="25"></div>
       </div>
-      <div class="row2">
-        <div class="field"><label>現預金<span class="unit">万円</span></label><input type="number" id="cashSavings" value="200"></div>
-        <div class="field"><label>万一時の配偶者収入<span class="unit">万円/年</span></label><input type="number" id="spouseIncome" value="0"></div>
-      </div>
+      <div class="field"><label>現預金<span class="unit">万円</span></label><input type="number" id="cashSavings" value="200"></div>
       <div class="field"><label>教育方針（概算テーブル）</label>
         <select id="eduPlan">
           <option value="public">公立中心（大学は国公立想定）</option>
@@ -140,6 +137,17 @@
         </select>
       </div>
       <div class="field"><label>今入っている死亡保障<span class="unit">万円</span></label><input type="number" id="curDeath" value="0"></div>
+    </div>
+
+    <div class="panel">
+      <h2><span class="n">任意</span> 👫 奥さん（世帯）</h2>
+      <p class="hint" style="margin:-4px 0 9px">空欄でOK。入れると「世帯」で反映されます（明日は奥さんも同席用）。</p>
+      <div class="field"><label>奥さんの年収（共働き）<span class="unit">万円</span></label><input type="number" id="wifeIncome" value="0"></div>
+      <div class="row2">
+        <div class="field"><label>奥さんの保険料 合計<span class="unit">円/月</span></label><input type="number" id="wifePremium" value="0"></div>
+        <div class="field"><label>奥さんの死亡保障<span class="unit">万円</span></label><input type="number" id="wifeDeath" value="0"></div>
+      </div>
+      <p class="hint">※奥さん自身の保険の「継続/解約」の本格見直しは、今回（夫の学資）が片付いてから別途やりましょう。</p>
     </div>
 
     <div class="panel">
@@ -207,6 +215,7 @@
         <tr><th>項目</th><th style="text-align:right">金額（概算）</th></tr>
         <tr><td>遺族の生活費（末子22歳まで・生活費の70%）</td><td class="num" id="bLiving">—</td></tr>
         <tr><td>教育費の残り（子2人）</td><td class="num" id="bEdu">—</td></tr>
+        <tr><td>− 奥さんの収入（共働き・末子まで）</td><td class="num" id="bWifeInc">—</td></tr>
         <tr><td>− 遺族年金の見込み（基礎＋厚生）</td><td class="num" id="bPension">—</td></tr>
         <tr><td>− 現預金</td><td class="num" id="bCash">—</td></tr>
         <tr><td>− 今の死亡保障</td><td class="num" id="bCur">—</td></tr>
@@ -218,6 +227,11 @@
         <span class="pill" id="bGapPill">過不足 —</span>
       </div>
       <div class="muted" style="margin-top:5px">必要な保障だけ“掛け捨て”で持てば、貯蓄部分の保険料が投資に回せる、という考え方。</div>
+    </div>
+
+    <div class="panel" style="background:#f3f6fb;border-color:#cdddf0">
+      <p style="margin:0 0 6px;font-weight:700;font-size:13px;color:#2e5cb8">👫 世帯メモ（任意入力ぶんを反映）</p>
+      <div class="muted" id="worldMemo" style="line-height:1.9">—</div>
     </div>
 
     <div class="panel result">
@@ -355,7 +369,8 @@ function readInputs(){
     selfAge:g('selfAge'), spouseAge:g('spouseAge'),
     c1:g('child1Age'), c2:g('child2Age'),
     gross:g('grossIncome'), living:g('livingMonthly'), cash:g('cashSavings')*MAN,
-    spouseInc:g('spouseIncome'), eduPlan:$('eduPlan').value,
+    wifeIncome:g('wifeIncome'), wifePremium:g('wifePremium'), wifeDeath:g('wifeDeath')*MAN,
+    eduPlan:$('eduPlan').value,
     rate:parseFloat($('taxRate').value),
     gMonthly:g('gMonthly'), gYears:g('gYears'), gToMat:g('gToMaturity'), gMatRate:g('gMatRate')/100,
     kMonthly:g('kMonthly'), kYears:g('kYears'), kQual:$('kQualified').value==='yes',
@@ -398,7 +413,8 @@ function recalc(){
   /* ====== B：必要保障額 ====== */
   const youngest = Math.min(x.c1, x.c2);
   const yrsToIndep = Math.max(0, 22-youngest);
-  const livingNeed = x.living*MAN*12*0.70*yrsToIndep - (x.spouseInc*MAN*yrsToIndep); // 遺族生活費−配偶者収入
+  const livingNeed = x.living*MAN*12*0.70*yrsToIndep;        // 遺族生活費（奥さんの収入は下で別行控除）
+  const wifeIncomeTotal = x.wifeIncome*MAN*yrsToIndep;       // 共働き：奥さんの収入（末子独立まで続く前提）
   const eduNeed = eduRemaining(x.c1,x.eduPlan)+eduRemaining(x.c2,x.eduPlan);
   // 遺族年金（年ごとに積み上げ・基礎は子が18歳で段階的に終了／厚生はこの保障期間 継続）
   const avgStd = Math.min(x.gross*MAN/12, 650000);           // 平均標準報酬（月・上限ざっくり）
@@ -409,11 +425,12 @@ function recalc(){
     const kiso = u18>0 ? 831700 + 239300*u18 : 0;            // 遺族基礎（子がいる間のみ・2025年度）
     pensionTotal += kiso + koseiAnnual;                      // 中高齢寡婦加算は除外（＝保障を多めに見積もる安全側）
   }
-  const need = Math.max(0, (livingNeed+eduNeed) - pensionTotal - x.cash - x.curDeath);
+  const need = Math.max(0, (livingNeed+eduNeed) - wifeIncomeTotal - pensionTotal - x.cash - x.curDeath);
   lastNeed = need; // autoTermボタン用に保持（DOM文字列を再パースしない）
 
   $('bLiving').textContent = man(Math.max(0,livingNeed));
   $('bEdu').textContent = man(eduNeed);
+  $('bWifeInc').textContent = man(wifeIncomeTotal);
   $('bPension').textContent = man(pensionTotal);
   $('bCash').textContent = man(x.cash);
   $('bCur').textContent = man(x.curDeath);
@@ -505,6 +522,20 @@ function recalc(){
   $('destHint').textContent = knob.dest==='nisa'
     ? 'NISA：利益が非課税・いつでも引き出せる（教育費に向く）'
     : 'iDeCo：掛金が全額所得控除（節税大）だが60歳まで引き出せない・公務員は月2万まで';
+
+  /* ====== 👫 世帯メモ（軽・世帯まとめ型／任意入力ぶんを合算表示） ====== */
+  const worldIncome = x.gross + x.wifeIncome;                 // 万円
+  const husbandPrem = x.gMonthly + x.kMonthly;                // 円/月（夫の現状保険料）
+  const worldPrem = husbandPrem + x.wifePremium;              // 円/月
+  const worldDeath = x.curDeath + x.wifeDeath;                // 円
+  let memo = `世帯年収：夫 ${x.gross.toLocaleString()}万 ＋ 妻 ${x.wifeIncome.toLocaleString()}万 ＝ <b>${worldIncome.toLocaleString()}万円</b><br>`
+    + `世帯の保険料（月）：夫 ${yenC(husbandPrem)} ＋ 妻 ${yenC(x.wifePremium)} ＝ <b>${yenC(worldPrem)}</b><br>`
+    + `世帯の死亡保障：夫 ${man(x.curDeath)} ＋ 妻 ${man(x.wifeDeath)} ＝ <b>${man(worldDeath)}</b>`;
+  if(x.wifeIncome<=0 && x.wifePremium<=0 && x.wifeDeath<=0)
+    memo += `<br><span style="font-size:11px">※左の「奥さん（世帯）」に年収・保険を入れると、ここに世帯で反映されます。</span>`;
+  else
+    memo += `<br><span style="font-size:11px">※必要保障B（夫に万一）に効くのは「夫の死亡保障」と「奥さんの“収入”」のみ。奥さんの保険そのものの見直しは別途。</span>`;
+  $('worldMemo').innerHTML = memo;
 
   saveLS();
 }
