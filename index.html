@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>友達のライフプラン（その場いじりモード）</title>
+<style>
+  :root{
+    --bg:#eef1f5; --card:#ffffff; --ink:#1a1a2e; --muted:#5f6275;
+    --line:rgba(20,20,40,.12); --accent:#1a1a2e; --accent2:#2e5cb8;
+    --keep:#8a8f9c; --invest:#2e7d56; --good:#1f7a4d; --warn:#b8860b; --bad:#a3324b;
+    --soft:#f4f6fa;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--ink);
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic UI",Meiryo,sans-serif;line-height:1.6;
+    -webkit-font-smoothing:antialiased}
+  .topbar{background:var(--accent);color:#fff;padding:12px 20px}
+  .topbar h1{margin:0;font-size:17px;font-weight:700}
+  .topbar p{margin:2px 0 0;font-size:11.5px;opacity:.75;font-family:ui-monospace,monospace;letter-spacing:.04em}
+  .layout{display:grid;grid-template-columns:360px 1fr;gap:16px;max-width:1280px;margin:16px auto;padding:0 16px 60px}
+  @media(max-width:880px){.layout{grid-template-columns:1fr}}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 15px;margin-bottom:14px}
+  .panel h2{font-size:13px;margin:0 0 10px;letter-spacing:.04em;color:var(--accent);
+    border-bottom:2px solid var(--accent);padding-bottom:5px;display:flex;align-items:center;gap:6px}
+  .panel h2 .n{background:var(--accent);color:#fff;border-radius:5px;font-size:11px;padding:1px 6px;font-family:ui-monospace,monospace}
+  .field{margin:8px 0}
+  .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:3px}
+  .field .unit{color:var(--muted);font-size:11px;margin-left:4px}
+  input[type=number]{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:7px;font-size:14px;background:#fff;color:var(--ink)}
+  input[type=number]:focus{outline:2px solid var(--accent2);border-color:transparent}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  select{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:7px;font-size:13.5px;background:#fff}
+  /* セグメント（継続/解約トグル） */
+  .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{flex:1;border:none;background:#fff;padding:8px 4px;font-size:13px;cursor:pointer;color:var(--muted);font-weight:600}
+  .seg button.on{background:var(--accent);color:#fff}
+  .seg.cancel button.on{background:var(--bad)}
+  .knob{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:11px 12px;margin:9px 0}
+  .knob .kh{display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px;margin-bottom:3px}
+  .knob .kv{font-weight:700;font-size:14px;color:var(--accent2)}
+  input[type=range]{width:100%;accent-color:var(--accent2)}
+  /* 結果側 */
+  .result h2{font-size:14px;margin:0 0 8px;display:flex;align-items:center;gap:8px}
+  .result .tagL{background:var(--invest);color:#fff;border-radius:6px;font-size:10.5px;padding:2px 7px;font-family:ui-monospace,monospace}
+  .big{font-size:27px;font-weight:800;line-height:1.1}
+  .vs{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;margin:6px 0 4px}
+  .vsbox{border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-align:center}
+  .vsbox .l{font-size:11px;color:var(--muted);margin-bottom:2px}
+  .vsbox.keep{background:#f6f7f9}
+  .vsbox.invest{background:#eef7f1;border-color:#a7d3ba}
+  .arrow{font-size:20px;color:var(--muted)}
+  .delta{text-align:center;font-size:13px;margin:4px 0 2px;font-weight:700}
+  .delta.pos{color:var(--good)} .delta.neg{color:var(--bad)}
+  canvas{margin-top:6px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:4px}
+  th,td{border:1px solid var(--line);padding:6px 8px}
+  th{background:#eef0f4;text-align:left}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .note{background:#fff8e6;border:1px solid #e3c766;border-radius:10px;padding:11px 13px;font-size:12.5px;margin-top:10px}
+  .note b{color:#8a6500}
+  .muted{color:var(--muted);font-size:11.5px}
+  .hint{font-size:11px;color:var(--muted);margin-top:2px}
+  .pillrow{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .pill{font-size:11px;border:1px solid var(--line);border-radius:999px;padding:3px 9px;background:#fff}
+  .foot{max-width:1280px;margin:0 auto;padding:0 16px 40px;font-size:11px;color:var(--muted)}
+  .reset{background:#fff;border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:12px;cursor:pointer;color:var(--muted)}
+  details summary{cursor:pointer;font-size:12.5px;color:var(--accent2);margin-top:6px}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>友達のライフプラン — その場いじりモード</h1>
+  <p>OFFLINE · 数字やツマミを動かすと即・再計算 ／ すべて概算（意思決定の目安）</p>
+</div>
+
+<div class="layout">
+  <!-- ============ 左：入力 ＆ ツマミ ============ -->
+  <div>
+    <div class="panel">
+      <h2><span class="n">入力</span> 世帯・家計</h2>
+      <div class="row2">
+        <div class="field"><label>本人の年齢</label><input type="number" id="selfAge" value="32"></div>
+        <div class="field"><label>配偶者の年齢</label><input type="number" id="spouseAge" value="32"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>第1子 いまの年齢</label><input type="number" id="child1Age" value="5"></div>
+        <div class="field"><label>第2子 いまの年齢</label><input type="number" id="child2Age" value="2"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>額面年収<span class="unit">万円</span></label><input type="number" id="grossIncome" value="500"></div>
+        <div class="field"><label>毎月の生活費<span class="unit">万円</span></label><input type="number" id="livingMonthly" value="25"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>現預金<span class="unit">万円</span></label><input type="number" id="cashSavings" value="200"></div>
+        <div class="field"><label>万一時の配偶者収入<span class="unit">万円/年</span></label><input type="number" id="spouseIncome" value="0"></div>
+      </div>
+      <div class="field"><label>教育方針（概算テーブル）</label>
+        <select id="eduPlan">
+          <option value="public">公立中心（大学は国公立想定）</option>
+          <option value="private">私立中心（私立大学・一部下宿）</option>
+        </select>
+      </div>
+      <div class="field"><label>所得税の限界税率（年収から自動・変更可）</label>
+        <select id="taxRate">
+          <option value="0.05">5%</option>
+          <option value="0.10" selected>10%</option>
+          <option value="0.20">20%</option>
+          <option value="0.23">23%</option>
+          <option value="0.33">33%</option>
+        </select>
+        <div class="hint" id="taxHint">公務員フラグON：遺族厚生年金あり（300月みなし）で計算</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2><span class="n">入力</span> 学資保険</h2>
+      <div class="row2">
+        <div class="field"><label>月額保険料<span class="unit">円/月</span></label><input type="number" id="gMonthly" value="15000"></div>
+        <div class="field"><label>これまで加入<span class="unit">年</span></label><input type="number" id="gYears" value="5"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>あと何年で満期<span class="unit">年</span></label><input type="number" id="gToMaturity" value="13"></div>
+        <div class="field"><label>満期返戻率<span class="unit">%</span></label><input type="number" id="gMatRate" value="105"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2><span class="n">入力</span> 個人年金</h2>
+      <div class="row2">
+        <div class="field"><label>月額保険料<span class="unit">円/月</span></label><input type="number" id="kMonthly" value="15000"></div>
+        <div class="field"><label>これまで加入<span class="unit">年</span></label><input type="number" id="kYears" value="5"></div>
+      </div>
+      <div class="field"><label>税制適格特約</label>
+        <select id="kQualified">
+          <option value="yes" selected>あり（個人年金保険料控除の枠）</option>
+          <option value="no">なし（一般生命保険料控除の枠）</option>
+        </select>
+      </div>
+      <div class="field"><label>今入っている死亡保障<span class="unit">万円</span></label><input type="number" id="curDeath" value="0"></div>
+    </div>
+
+    <div class="panel">
+      <h2><span class="n">ツマミ</span> 動かすと即・再計算</h2>
+      <div class="field"><label>学資保険を…</label>
+        <div class="seg cancel" id="segG">
+          <button data-v="keep">継続</button><button data-v="cancel" class="on">解約</button>
+        </div>
+      </div>
+      <div class="field"><label>個人年金を…</label>
+        <div class="seg cancel" id="segK">
+          <button data-v="keep">継続</button><button data-v="cancel" class="on">解約</button>
+        </div>
+      </div>
+      <div class="knob">
+        <div class="kh"><span>学資 解約で戻る率（概算）</span><span class="kv"><span id="gSurV">80</span>%</span></div>
+        <input type="range" id="gSur" min="50" max="110" value="80" step="1">
+        <div class="hint">証券が無くてもOK。動かして「だいたいこの辺」を一緒に探る</div>
+      </div>
+      <div class="knob">
+        <div class="kh"><span>個年 解約で戻る率（概算）</span><span class="kv"><span id="kSurV">80</span>%</span></div>
+        <input type="range" id="kSur" min="50" max="110" value="80" step="1">
+      </div>
+      <div class="field"><label>解約したお金の振替先</label>
+        <div class="seg" id="segDest">
+          <button data-v="nisa" class="on">NISA</button><button data-v="ideco">iDeCo</button>
+        </div>
+        <div class="hint" id="destHint">NISA：利益が非課税・いつでも引き出せる</div>
+      </div>
+      <div class="knob">
+        <div class="kh"><span>毎月の積立額</span><span class="kv">¥<span id="investV">30,000</span></span></div>
+        <input type="range" id="invest" min="0" max="100000" value="30000" step="1000">
+        <div class="hint">家計C・振替先（NISA/iDeCo）用の合計額。教育パネルAは学資の保険料ぶんで自動計算。<button class="reset" id="autoInvest" style="padding:2px 7px">浮いた額に合わせる</button></div>
+      </div>
+      <div class="knob">
+        <div class="kh"><span>想定利回り（年）</span><span class="kv"><span id="rateV">5.0</span>%</span></div>
+        <input type="range" id="rate" min="0" max="8" value="5" step="0.5">
+      </div>
+      <div class="knob">
+        <div class="kh"><span>掛け捨ての保障額</span><span class="kv"><span id="termV">2,000</span>万円</span></div>
+        <input type="range" id="term" min="0" max="6000" value="2000" step="100">
+        <div class="hint"><button class="reset" id="autoTerm" style="padding:2px 7px">必要保障額に合わせる</button></div>
+      </div>
+      <button class="reset" id="resetAll" style="margin-top:6px">入力をリセット</button>
+    </div>
+  </div>
+
+  <!-- ============ 右：結果 ============ -->
+  <div>
+    <div class="panel result">
+      <h2><span class="tagL">A</span> 教育資金：学資保険 継続 vs 解約→投資</h2>
+      <div class="vs">
+        <div class="vsbox keep"><div class="l">継続（満期受取）</div><div class="big" id="aKeep">—</div><div class="muted">満期時</div></div>
+        <div class="arrow">→</div>
+        <div class="vsbox invest"><div class="l">解約→投資（評価額）</div><div class="big" id="aInvest">—</div><div class="muted">同じ年</div></div>
+      </div>
+      <div class="delta" id="aDelta">—</div>
+      <canvas id="chartA" height="150"></canvas>
+      <div class="muted" id="aSub" style="margin-top:4px"></div>
+    </div>
+
+    <div class="panel result">
+      <h2><span class="tagL">B</span> 必要保障額 vs いまの保障（公務員・遺族年金あり）</h2>
+      <table>
+        <tr><th>項目</th><th style="text-align:right">金額（概算）</th></tr>
+        <tr><td>遺族の生活費（末子22歳まで・生活費の70%）</td><td class="num" id="bLiving">—</td></tr>
+        <tr><td>教育費の残り（子2人）</td><td class="num" id="bEdu">—</td></tr>
+        <tr><td>− 遺族年金の見込み（基礎＋厚生）</td><td class="num" id="bPension">—</td></tr>
+        <tr><td>− 現預金</td><td class="num" id="bCash">—</td></tr>
+        <tr><td>− 今の死亡保障</td><td class="num" id="bCur">—</td></tr>
+        <tr style="font-weight:800;background:#fbfbe8"><td>＝ あと必要な保障額</td><td class="num" id="bNeed">—</td></tr>
+      </table>
+      <div class="pillrow">
+        <span class="pill">掛け捨て<span id="bTermCover">2,000</span>万の保険料 ≒ <b id="bTermPrem">—</b></span>
+        <span class="pill">解約で浮く保険料 <b id="bFreed">—</b>/月</span>
+        <span class="pill" id="bGapPill">過不足 —</span>
+      </div>
+      <div class="muted" style="margin-top:5px">必要な保障だけ“掛け捨て”で持てば、貯蓄部分の保険料が投資に回せる、という考え方。</div>
+    </div>
+
+    <div class="panel result">
+      <h2><span class="tagL">C</span> 家計インパクト＆生命保険料控除（正直な注記）</h2>
+      <div class="row2" style="gap:10px">
+        <div class="vsbox"><div class="l">保険料が軽くなる（月）</div><div class="big" id="cFree">—</div><div class="muted" id="cFreeSub">保険料 ¥— → ¥—</div></div>
+        <div class="vsbox"><div class="l">投資にまわす（月）</div><div class="big" id="cInvest">—</div><div class="muted">＝あなたの資産（NISA/iDeCo）</div></div>
+      </div>
+      <div class="muted" id="cNet" style="margin-top:7px;line-height:1.7"></div>
+      <div class="note">
+        <b>⚖ 生命保険料控除（節税）の扱い：</b>
+        <span id="taxNote">—</span>
+        <details>
+          <summary>控除の内訳を見る</summary>
+          <table style="margin-top:6px">
+            <tr><th>　</th><th style="text-align:right">継続（今）</th><th style="text-align:right">この案</th></tr>
+            <tr><td>一般枠 控除（学資＋掛け捨て）</td><td class="num" id="dxIp0">—</td><td class="num" id="dxIp1">—</td></tr>
+            <tr><td>個人年金枠 控除</td><td class="num" id="dxKn0">—</td><td class="num" id="dxKn1">—</td></tr>
+            <tr><td>iDeCo 全額所得控除</td><td class="num" id="dxId0">—</td><td class="num" id="dxId1">—</td></tr>
+            <tr style="font-weight:700"><td>年間の節税額</td><td class="num" id="dxSave0">—</td><td class="num" id="dxSave1">—</td></tr>
+          </table>
+          <div class="muted" style="margin-top:4px">新制度：各枠 所得税4万/住民税2.8万・合算 所得税12万/住民税7万。節税＝控除額×(限界税率＋住民税10%)。<br>※学資保険だけで一般枠はほぼ上限に達します。掛け捨ての保障額を大きくすると一般枠の控除が一部復活するため、上の「この案」の節税額は保障額スライダーで動きます。</div>
+        </details>
+      </div>
+    </div>
+
+    <div class="panel" style="background:#f6f7f9">
+      <div class="muted">
+        <b>前提（すべて概算・意思決定の目安）：</b>
+        遺族基礎年金=831,700＋子の加算239,300×2（2025年度）／遺族厚生年金=報酬比例×3/4・300月みなし／
+        公務員iDeCo上限=月2万円／中高齢寡婦加算・配偶者自身の老後・インフレは簡易化。
+        精密な数字は社長（FP）が口頭で補足する前提。
+      </div>
+    </div>
+  </div>
+</div>
+<div class="foot">友達向けライフプラン what-if · v0.1 · オフライン単体（このフォルダをUSBに入れて持ち運び可）</div>
+
+<script src="vendor/chart.umd.min.js"></script>
+<script>
+/* ============================================================
+   友達向け ライフプラン what-if  ロジック
+   - 金額は内部すべて「円」で計算 → 表示時に万円へ
+   - すべて概算（意思決定の目安）
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const MAN = 10000;
+
+/* --- 状態（ツマミ） --- */
+const knob = { gAction:'cancel', kAction:'cancel', dest:'nisa' };
+let lastNeed = 0; // 直近に計算した必要保障額（円）。autoTermボタンがDOM文字列をパースしないよう保持
+
+/* --- 表示ヘルパー --- */
+function man(yen){ // 円→「◯◯万円」（桁区切りつき）
+  return (yen/MAN).toLocaleString('ja-JP',{maximumFractionDigits:0})+'万円';
+}
+function yenC(yen){ return '¥'+Math.round(yen).toLocaleString('ja-JP'); }
+
+/* --- 教育費 概算テーブル（万円/年・各年齢 0..21） --- */
+function eduAnnual(age, plan){
+  // 年齢に応じた1年あたり教育費（概算・万円）
+  if(age<3)  return plan==='private'?25:20;
+  if(age<6)  return plan==='private'?35:25;   // 幼稚園
+  if(age<12) return plan==='private'?45:35;   // 小学
+  if(age<15) return plan==='private'?75:50;   // 中学
+  if(age<18) return plan==='private'?95:55;   // 高校
+  if(age<22) return plan==='private'?160:110; // 大学(4年)
+  return 0;
+}
+function eduRemaining(childAge, plan){ // 今〜21歳までの残り教育費（円）
+  let sum=0;
+  for(let a=Math.max(0,Math.floor(childAge)); a<22; a++) sum += eduAnnual(a,plan)*MAN;
+  return sum;
+}
+
+/* --- 生命保険料控除（新制度・所得税/住民税）円 --- */
+function dedIncome(annual){ // 所得税の控除額
+  if(annual<=20000) return annual;
+  if(annual<=40000) return annual/2+10000;
+  if(annual<=80000) return annual/4+20000;
+  return 40000;
+}
+function dedResident(annual){ // 住民税の控除額
+  if(annual<=12000) return annual;
+  if(annual<=32000) return annual/2+6000;
+  if(annual<=56000) return annual/4+14000;
+  return 28000;
+}
+function taxSaveFrom(annualPremium, rate){ // 控除→節税額（円）
+  if(annualPremium<=0) return 0;
+  return dedIncome(annualPremium)*rate + dedResident(annualPremium)*0.10;
+}
+
+/* --- 年収→限界税率の自動推定 --- */
+function estimateRate(gross){ // gross:万円
+  if(gross<=330) return '0.05';
+  if(gross<=600) return '0.10';
+  if(gross<=900) return '0.20';
+  if(gross<=1200) return '0.23';
+  return '0.33';
+}
+
+/* --- 複利：一括＋毎月積立 の t年後評価額（円） --- */
+function futureValue(lump, monthly, years, annualRate){
+  const m = years*12;
+  const rm = annualRate/12;
+  let v = lump*Math.pow(1+rm, m);
+  if(rm>0) v += monthly*((Math.pow(1+rm,m)-1)/rm);
+  else v += monthly*m;
+  return v;
+}
+
+let chartA = null;
+
+function readInputs(){
+  const g = id => Math.max(0, parseFloat($(id).value)||0); // 負値・空欄は0に丸める（当日の誤入力ガード）
+  return {
+    selfAge:g('selfAge'), spouseAge:g('spouseAge'),
+    c1:g('child1Age'), c2:g('child2Age'),
+    gross:g('grossIncome'), living:g('livingMonthly'), cash:g('cashSavings')*MAN,
+    spouseInc:g('spouseIncome'), eduPlan:$('eduPlan').value,
+    rate:parseFloat($('taxRate').value),
+    gMonthly:g('gMonthly'), gYears:g('gYears'), gToMat:g('gToMaturity'), gMatRate:g('gMatRate')/100,
+    kMonthly:g('kMonthly'), kYears:g('kYears'), kQual:$('kQualified').value==='yes',
+    curDeath:g('curDeath')*MAN,
+    gSur:g('gSur')/100, kSur:g('kSur')/100,
+    invest:g('invest'), retRate:g('rate')/100, termCover:g('term')*MAN
+  };
+}
+
+function recalc(){
+  const x = readInputs();
+
+  /* ====== A：教育資金 継続 vs 解約→投資 ====== */
+  const gPaid = x.gMonthly*12*x.gYears;                       // これまで払込（円）
+  const gFuture = x.gMonthly*12*x.gToMat;                     // 満期まで払う分
+  const keepMaturity = (gPaid+gFuture)*x.gMatRate;            // 継続：満期受取（円）
+  const surrender = gPaid*x.gSur;                             // 今解約で戻る（円）
+  const monthlyInvest = x.invest;                             // 家計C・振替先用（学資＋個年の浮いた分の合計）
+  const eduMonthly = x.gMonthly;                              // ★パネルAは"学資の保険料そのもの"だけを投資（apples-to-apples）
+  const horizon = Math.max(1, x.gToMat);
+  const investAtMat = futureValue(surrender, eduMonthly, horizon, x.retRate);
+
+  $('aKeep').textContent = man(keepMaturity);
+  $('aInvest').textContent = man(investAtMat);
+  const aDiff = investAtMat-keepMaturity;
+  const aEl = $('aDelta');
+  aEl.textContent = (aDiff>=0?'解約→投資が ＋':'継続が ＋')+man(Math.abs(aDiff)).replace('万円','')+'万円 多い（満期時点）';
+  aEl.className = 'delta '+(aDiff>=0?'pos':'neg');
+  $('aSub').textContent = `満期＝${horizon}年後 ／ 両方とも"今の解約返戻金 ${man(surrender)}"が出発点。継続はそのまま満期へ、解約は ${man(surrender)}＋毎月${yenC(eduMonthly)}（学資の保険料ぶん）を年${(x.retRate*100).toFixed(1)}%で運用 ／ ※左の積立スライダー(家計C用)はこのグラフには影響しません`;
+
+  // 折れ線（0..horizon 年）★継続・投資とも起点を「今の解約返戻金」に揃える（同じ土俵で比較）
+  const labels=[], keepLine=[], investLine=[];
+  for(let t=0;t<=horizon;t++){
+    labels.push(t+'年');
+    keepLine.push(Math.round((surrender + (keepMaturity-surrender)*(t/horizon))/MAN)); // 継続：今の解約返戻金→満期受取へ
+    investLine.push(Math.round(futureValue(surrender, eduMonthly, t, x.retRate)/MAN));
+  }
+  drawChartA(labels, keepLine, investLine);
+
+  /* ====== B：必要保障額 ====== */
+  const youngest = Math.min(x.c1, x.c2);
+  const yrsToIndep = Math.max(0, 22-youngest);
+  const livingNeed = x.living*MAN*12*0.70*yrsToIndep - (x.spouseInc*MAN*yrsToIndep); // 遺族生活費−配偶者収入
+  const eduNeed = eduRemaining(x.c1,x.eduPlan)+eduRemaining(x.c2,x.eduPlan);
+  // 遺族年金（年ごとに積み上げ・基礎は子が18歳で段階的に終了／厚生はこの保障期間 継続）
+  const avgStd = Math.min(x.gross*MAN/12, 650000);           // 平均標準報酬（月・上限ざっくり）
+  const koseiAnnual = avgStd*5.481/1000*300*0.75;            // 遺族厚生：報酬比例×3/4・300月みなし（年・概算）
+  let pensionTotal = 0;
+  for(let yr=0; yr<yrsToIndep; yr++){
+    const u18 = ((x.c1+yr)<18?1:0)+((x.c2+yr)<18?1:0);       // 18歳未満の子の数（満18で切る＝年度末まで数えず・年金少なめ＝保障多めの安全側）
+    const kiso = u18>0 ? 831700 + 239300*u18 : 0;            // 遺族基礎（子がいる間のみ・2025年度）
+    pensionTotal += kiso + koseiAnnual;                      // 中高齢寡婦加算は除外（＝保障を多めに見積もる安全側）
+  }
+  const need = Math.max(0, (livingNeed+eduNeed) - pensionTotal - x.cash - x.curDeath);
+  lastNeed = need; // autoTermボタン用に保持（DOM文字列を再パースしない）
+
+  $('bLiving').textContent = man(Math.max(0,livingNeed));
+  $('bEdu').textContent = man(eduNeed);
+  $('bPension').textContent = man(pensionTotal);
+  $('bCash').textContent = man(x.cash);
+  $('bCur').textContent = man(x.curDeath);
+  $('bNeed').textContent = man(need);
+
+  // 掛け捨て保険料（概算）：32〜40代男性 定期 ≒ 1000万あたり 月1,300円
+  const termPrem = x.termCover/ (1000*MAN) * 1300;
+  $('bTermCover').textContent = (x.termCover/MAN).toLocaleString('ja-JP');
+  $('bTermPrem').textContent = yenC(termPrem)+'/月';
+  // 解約で浮く保険料
+  const freed = (knob.gAction==='cancel'?x.gMonthly:0)+(knob.kAction==='cancel'?x.kMonthly:0);
+  $('bFreed').textContent = yenC(freed);
+  const gap = x.termCover - need;
+  const gapPill = $('bGapPill');
+  if(Math.abs(gap)<50*MAN){ gapPill.textContent='過不足 ほぼ適正'; gapPill.style.background='#eef7f1'; }
+  else if(gap<0){ gapPill.textContent='保障 不足 '+man(-gap); gapPill.style.background='#fdeef1'; }
+  else { gapPill.textContent='保障 過剰 '+man(gap); gapPill.style.background='#fff8e6'; }
+
+  /* ====== 生命保険料控除（継続 vs この案） ====== */
+  const gAnnual = x.gMonthly*12, kAnnual = x.kMonthly*12, termAnnual = termPrem*12;
+  // 継続（今の状態）：学資=一般枠、個年=適格なら個年枠/非適格は一般枠
+  const ip0 = gAnnual + (x.kQual?0:kAnnual);
+  const kn0 = x.kQual?kAnnual:0;
+  const save0 = taxSaveFrom(ip0,x.rate)+taxSaveFrom(kn0,x.rate);
+  // この案：解約した分の控除は消滅。掛け捨ては一般枠に算入。
+  const ipKeepG = (knob.gAction==='keep'?gAnnual:0);
+  const ipKeepKnonq = (knob.kAction==='keep' && !x.kQual)?kAnnual:0;
+  const ip1 = ipKeepG + ipKeepKnonq + termAnnual;
+  const kn1 = (knob.kAction==='keep' && x.kQual)?kAnnual:0;
+  // iDeCo全額所得控除（振替先=iDeCo時、上限月2万）
+  let idecoAnnual0=0, idecoAnnual1=0, nisaMonthly=monthlyInvest;
+  if(knob.dest==='ideco'){
+    const idecoMonthly=Math.min(monthlyInvest,20000);
+    idecoAnnual1=idecoMonthly*12;
+    nisaMonthly=monthlyInvest-idecoMonthly;
+  }
+  const save1 = taxSaveFrom(ip1,x.rate)+taxSaveFrom(kn1,x.rate)+ idecoAnnual1*(x.rate+0.10);
+
+  $('dxIp0').textContent=yenC(taxSaveFrom(ip0,x.rate)); $('dxIp1').textContent=yenC(taxSaveFrom(ip1,x.rate));
+  $('dxKn0').textContent=yenC(taxSaveFrom(kn0,x.rate)); $('dxKn1').textContent=yenC(taxSaveFrom(kn1,x.rate));
+  $('dxId0').textContent=yenC(0); $('dxId1').textContent=yenC(idecoAnnual1*(x.rate+0.10));
+  $('dxSave0').textContent=yenC(save0); $('dxSave1').textContent=yenC(save1);
+
+  const taxDelta = save1-save0;
+  let tn='';
+  if(taxDelta<0) tn=`この案だと、生命保険料控除での節税が <b>年 ${yenC(-taxDelta)} 減ります</b>（解約で控除枠が消えるため）。それでもNISAの利益は非課税なので、長期ではカバーしやすい——という前提で判断してください。`;
+  else if(taxDelta>0) tn=`この案だと、節税が <b>年 ${yenC(taxDelta)} 増えます</b>（iDeCoの全額所得控除が効くため）。`;
+  else tn='控除による節税は、この案でもほぼ変わりません。';
+  if(knob.dest==='ideco' && nisaMonthly>0) tn+=` ※iDeCoは月2万円が上限なので、超過分 ${yenC(nisaMonthly)}/月 はNISAへ回す前提です。`;
+  $('taxNote').innerHTML = tn;
+
+  /* ====== C：家計インパクト（誤解を招かないよう分解して表示） ====== */
+  const premNow = x.gMonthly+x.kMonthly;
+  const premAfter = (knob.gAction==='keep'?x.gMonthly:0)+(knob.kAction==='keep'?x.kMonthly:0)+termPrem;
+  const freedMonthly = premNow - premAfter;               // 保険料が軽くなる額（＋＝軽くなる）
+  const netCash = freedMonthly - monthlyInvest;            // 投資に回したあとの純現金収支
+  $('cFree').textContent = (freedMonthly>=0?'＋':'−')+yenC(Math.abs(freedMonthly));
+  $('cFree').style.color = freedMonthly>=0?'var(--good)':'var(--bad)';
+  $('cFreeSub').textContent = `保険料 ${yenC(premNow)} → ${yenC(premAfter)}`;
+  $('cInvest').textContent = yenC(monthlyInvest);
+  $('cInvest').style.color = 'var(--accent2)';
+  $('cNet').innerHTML =
+    `純現金収支：<b>${netCash>=0?'＋':'−'}${yenC(Math.abs(netCash))}/月</b>`
+    + `（投資にまわすぶんを除けば、保険料は <b>${freedMonthly>=0?'＋':'−'}${yenC(Math.abs(freedMonthly))}/月 軽くなる</b>）。`
+    + `　控除の節税：<b>${taxDelta>=0?'＋':'−'}${yenC(Math.abs(taxDelta))}/年</b>。`;
+
+  // 振替先ヒント
+  $('destHint').textContent = knob.dest==='nisa'
+    ? 'NISA：利益が非課税・いつでも引き出せる（教育費に向く）'
+    : 'iDeCo：掛金が全額所得控除（節税大）だが60歳まで引き出せない・公務員は月2万まで';
+
+  saveLS();
+}
+
+function drawChartA(labels, keep, invest){
+  const data = {
+    labels,
+    datasets:[
+      {label:'継続（学資）', data:keep, borderColor:'#8a8f9c', backgroundColor:'rgba(138,143,156,.08)', borderWidth:2, tension:.15, pointRadius:0, fill:true},
+      {label:'解約→投資', data:invest, borderColor:'#2e7d56', backgroundColor:'rgba(46,125,86,.10)', borderWidth:2.5, tension:.15, pointRadius:0, fill:true}
+    ]
+  };
+  const opts = {responsive:true, animation:false,
+    plugins:{legend:{labels:{boxWidth:12,font:{size:11}}}, tooltip:{callbacks:{label:c=>c.dataset.label+'：'+c.parsed.y.toLocaleString()+'万円'}}},
+    scales:{y:{ticks:{callback:v=>v.toLocaleString()+'万',font:{size:10}}}, x:{ticks:{font:{size:10},maxTicksLimit:8}}}};
+  if(chartA){ chartA.data=data; chartA.options=opts; chartA.update(); }
+  else chartA = new Chart($('chartA'), {type:'line', data, options:opts});
+}
+
+/* --- セグメント・トグル配線 --- */
+function wireSeg(segId, key){
+  const seg=$(segId);
+  seg.querySelectorAll('button').forEach(b=>{
+    b.addEventListener('click',()=>{
+      seg.querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+      b.classList.add('on'); knob[key]=b.dataset.v; recalc();
+    });
+  });
+}
+
+/* --- localStorage（リロード復元のみ・任意） --- */
+const LS='lifeplan_whatif_v1';
+function saveLS(){
+  const o={}; document.querySelectorAll('input,select').forEach(e=>{if(e.id)o[e.id]=e.type==='number'?e.value:(e.value);});
+  o._knob=knob;
+  try{localStorage.setItem(LS,JSON.stringify(o));}catch(e){}
+}
+function loadLS(){
+  try{
+    const o=JSON.parse(localStorage.getItem(LS)||'null'); if(!o)return;
+    document.querySelectorAll('input,select').forEach(e=>{if(e.id&&o[e.id]!==undefined)e.value=o[e.id];});
+    if(o._knob){Object.assign(knob,o._knob);
+      [['segG','gAction'],['segK','kAction'],['segDest','dest']].forEach(([sid,k])=>{
+        $(sid).querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.v===knob[k]));
+      });
+    }
+  }catch(e){}
+}
+
+/* --- 初期化 --- */
+function init(){
+  loadLS();
+  wireSeg('segG','gAction'); wireSeg('segK','kAction'); wireSeg('segDest','dest');
+
+  // スライダーの値表示
+  const sv=(id,vid,suf,fix)=>{const e=$(id);const f=()=>{$(vid).textContent=suf==='¥'?(+e.value).toLocaleString():(fix!=null?(+e.value).toFixed(fix):e.value);};e.addEventListener('input',()=>{f();recalc();});f();};
+  sv('gSur','gSurV'); sv('kSur','kSurV'); sv('rate','rateV',null,1);
+  $('invest').addEventListener('input',()=>{$('investV').textContent=(+$('invest').value).toLocaleString();recalc();});
+  $('investV').textContent=(+$('invest').value).toLocaleString();
+  $('term').addEventListener('input',()=>{$('termV').textContent=(+$('term').value).toLocaleString();recalc();});
+  $('termV').textContent=(+$('term').value).toLocaleString();
+
+  // 数値・select 変更で再計算
+  // grossIncome は下で個別に（税率自動更新つき）登録するので二重recalcを避けて除外
+  document.querySelectorAll('input[type=number]:not(#grossIncome),select').forEach(e=>e.addEventListener('input',recalc));
+
+  // 年収→税率 自動
+  $('grossIncome').addEventListener('input',()=>{$('taxRate').value=estimateRate(parseFloat($('grossIncome').value)||0);recalc();});
+
+  // 「浮いた額に合わせる」「必要保障に合わせる」
+  $('autoInvest').addEventListener('click',()=>{
+    const x=readInputs();
+    const freed=(knob.gAction==='cancel'?x.gMonthly:0)+(knob.kAction==='cancel'?x.kMonthly:0);
+    $('invest').value=freed; $('investV').textContent=freed.toLocaleString(); recalc();
+  });
+  $('autoTerm').addEventListener('click',()=>{
+    // lastNeed（円）を直接使う。DOM文字列のパースに依存しない（表示書式を変えても壊れない）
+    const needMan = Math.min(6000, Math.round(lastNeed/MAN/100)*100); // 100万円単位に丸め
+    $('term').value = needMan; $('termV').textContent = needMan.toLocaleString(); recalc();
+  });
+
+  $('resetAll').addEventListener('click',()=>{localStorage.removeItem(LS);location.reload();});
+
+  recalc();
+}
+window.addEventListener('DOMContentLoaded',init);
+</script>
+</body>
+</html>
