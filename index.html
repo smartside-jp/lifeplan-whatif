@@ -180,7 +180,7 @@
       <div class="knob">
         <div class="kh"><span>毎月の積立額</span><span class="kv">¥<span id="investV">30,000</span></span></div>
         <input type="range" id="invest" min="0" max="100000" value="30000" step="100">
-        <div class="hint"><b>基本は「浮いた額に合わせる」</b>を押す → 解約で軽くなった保険料（C欄と同額）がそのまま積立額に入ります。そこからスライダーを足せば「さらに上乗せで投資したら？」も試せます。教育パネルAは学資の保険料ぶんで自動計算。<button class="reset" id="autoInvest" style="padding:2px 7px">浮いた額に合わせる</button></div>
+        <div class="hint"><b>初期は「浮いた額」が自動で入ります</b>（解約で軽くなった保険料＝C欄と同額・純現金収支±0）。スライダーを動かせば「さらに上乗せで投資したら？」を試せます。<button class="reset" id="autoInvest" style="padding:2px 7px">浮いた額に戻す</button>　教育パネルAは学資の保険料ぶんで自動計算。</div>
       </div>
       <div class="knob">
         <div class="kh"><span>想定利回り（年）</span><span class="kv"><span id="rateV">5.0</span>%</span></div>
@@ -296,6 +296,7 @@ const MAN = 10000;
 const knob = { gAction:'cancel', kAction:'cancel', dest:'nisa' };
 let lastNeed = 0; // 直近に計算した必要保障額（円）。autoTermボタンがDOM文字列をパースしないよう保持
 let lastFreed = 0; // 直近の「保険料が軽くなる額（月・円）」＝掛け捨て後。autoInvestボタンがC欄と完全一致するよう保持
+let investAuto = true; // true＝投資額を「浮いた額」に自動同期（基本）。スライダーを手で動かすとfalse（上乗せモード）になり、ボタンでtrueに戻す
 
 /* --- 表示ヘルパー --- */
 function man(yen){ // 円→「◯◯万円」（桁区切りつき）
@@ -389,7 +390,7 @@ function recalc(){
   const gFuture = x.gMonthly*12*x.gToMat;                     // 満期まで払う分
   const keepMaturity = (gPaid+gFuture)*x.gMatRate;            // 継続：満期受取（円）
   const surrender = gPaid*x.gSur;                             // 今解約で戻る（円）
-  const monthlyInvest = x.invest;                             // 家計C・振替先用（学資＋個年の浮いた分の合計）
+  let monthlyInvest = x.invest;                               // 家計C・振替先用。investAuto時は下で"浮いた額"に自動同期
   const eduMonthly = x.gMonthly;                              // ★パネルAは"学資の保険料そのもの"だけを投資（apples-to-apples）
   const horizon = Math.max(1, x.gToMat);
   const investAtMat = futureValue(surrender, eduMonthly, horizon, x.retRate);
@@ -441,6 +442,16 @@ function recalc(){
   const termPrem = x.termCover/ (1000*MAN) * 1300;
   $('bTermCover').textContent = (x.termCover/MAN).toLocaleString('ja-JP');
   $('bTermPrem').textContent = yenC(termPrem)+'/月';
+
+  // ★解約で軽くなる保険料（掛け捨て後）＝C欄と同じ。基本は投資額をこれに自動同期（"浮いた分を投資"）。
+  //   iDeCo/NISA分割より前に確定させ、表示も含めて全体で同じ monthlyInvest を使う。
+  lastFreed = (x.gMonthly+x.kMonthly)
+            - ((knob.gAction==='keep'?x.gMonthly:0)+(knob.kAction==='keep'?x.kMonthly:0)+termPrem);
+  if(investAuto){
+    monthlyInvest = Math.min(100000, Math.max(0, Math.round(lastFreed/100)*100));
+    if(+$('invest').value !== monthlyInvest) $('invest').value = monthlyInvest; // スライダー位置も追従（input発火なし）
+    $('investV').textContent = monthlyInvest.toLocaleString();
+  }
   // 解約で浮く保険料
   const freed = (knob.gAction==='cancel'?x.gMonthly:0)+(knob.kAction==='cancel'?x.kMonthly:0);
   $('bFreed').textContent = yenC(freed);
@@ -486,9 +497,8 @@ function recalc(){
   /* ====== C：家計インパクト（誤解を招かないよう分解して表示） ====== */
   const premNow = x.gMonthly+x.kMonthly;
   const premAfter = (knob.gAction==='keep'?x.gMonthly:0)+(knob.kAction==='keep'?x.kMonthly:0)+termPrem;
-  const freedMonthly = premNow - premAfter;               // 保険料が軽くなる額（＋＝軽くなる）
-  lastFreed = freedMonthly;                                // autoInvestボタン用に保持（掛け捨て後・C欄と一致）
-  const netCash = freedMonthly - monthlyInvest;            // 投資に回したあとの純現金収支
+  const freedMonthly = premNow - premAfter;               // 保険料が軽くなる額（＋＝軽くなる）＝上の lastFreed と同値
+  const netCash = freedMonthly - monthlyInvest;            // 投資に回したあとの純現金収支（自動同期時はほぼ0）
   $('cFree').textContent = (freedMonthly>=0?'＋':'−')+yenC(Math.abs(freedMonthly));
   $('cFree').style.color = freedMonthly>=0?'var(--good)':'var(--bad)';
   $('cFreeSub').textContent = `保険料 ${yenC(premNow)} → ${yenC(premAfter)}`;
@@ -595,7 +605,7 @@ function init(){
   // スライダーの値表示
   const sv=(id,vid,suf,fix)=>{const e=$(id);const f=()=>{$(vid).textContent=suf==='¥'?(+e.value).toLocaleString():(fix!=null?(+e.value).toFixed(fix):e.value);};e.addEventListener('input',()=>{f();recalc();});f();};
   sv('gSur','gSurV'); sv('kSur','kSurV'); sv('rate','rateV',null,1);
-  $('invest').addEventListener('input',()=>{$('investV').textContent=(+$('invest').value).toLocaleString();recalc();});
+  $('invest').addEventListener('input',()=>{investAuto=false;$('investV').textContent=(+$('invest').value).toLocaleString();recalc();}); // 手で動かす＝上乗せモード
   $('investV').textContent=(+$('invest').value).toLocaleString();
   $('term').addEventListener('input',()=>{$('termV').textContent=(+$('term').value).toLocaleString();recalc();});
   $('termV').textContent=(+$('term').value).toLocaleString();
@@ -609,10 +619,8 @@ function init(){
 
   // 「浮いた額に合わせる」「必要保障に合わせる」
   $('autoInvest').addEventListener('click',()=>{
-    // C欄「保険料が軽くなる（月）」と完全一致させる（掛け捨て保険料を引いた後の浮いた額）。
-    // スライダーstep=100・範囲[0,100000]に合わせて丸め・クランプ。
-    const v = Math.min(100000, Math.max(0, Math.round(lastFreed/100)*100));
-    $('invest').value=v; $('investV').textContent=v.toLocaleString(); recalc();
+    // 自動同期モードに戻す → recalc内で投資額が「浮いた額（C欄と同額）」に揃う。
+    investAuto=true; recalc();
   });
   $('autoTerm').addEventListener('click',()=>{
     // lastNeed（円）を直接使う。DOM文字列のパースに依存しない（表示書式を変えても壊れない）
