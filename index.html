@@ -244,6 +244,18 @@
       </div>
     </div>
 
+    <div class="panel result" style="border-color:#9cc0e8">
+      <h2 style="border-bottom-color:#2e5cb8;color:#2e5cb8"><span class="tagL" style="background:#2e5cb8">＋</span> 目先のイメージ：解約で減る控除は、運用益でカバーできる？</h2>
+      <div id="coverLoss" class="muted" style="margin:2px 0 8px">—</div>
+      <table>
+        <tr><th>浮いた保険料を投資した「増えた分（含み益のみ）」</th><th style="text-align:right">5年後</th><th style="text-align:right">10年後</th></tr>
+        <tr><td>年5% で運用</td><td class="num" id="g5_5">—</td><td class="num" id="g5_10">—</td></tr>
+        <tr><td>年7% で運用</td><td class="num" id="g7_5">—</td><td class="num" id="g7_10">—</td></tr>
+      </table>
+      <div id="coverConclusion" class="note" style="margin-top:8px;background:#eef4fb;border-color:#9cc0e8">—</div>
+      <div class="muted" style="margin-top:5px;font-size:11px">※「増えた分」＝積み立てた元本を除いた運用益のみ。控除の損（解約のコスト）と直接比べるための目先の概算です。浮いた保険料＝上の「保険料が軽くなる（月）」の額を毎月積み立てた前提。<b>運用は変動あり（年5%／7%はあくまで前提値）／学資そのものの損得はパネルA</b>を参照。</div>
+    </div>
+
     <div class="panel" style="background:#f6f7f9">
       <div class="muted">
         <b>前提（すべて概算・意思決定の目安）：</b>
@@ -328,6 +340,11 @@ function futureValue(lump, monthly, years, annualRate){
   if(rm>0) v += monthly*((Math.pow(1+rm,m)-1)/rm);
   else v += monthly*m;
   return v;
+}
+
+// 積立の「増えた分（含み益のみ）」＝将来価値 − 積み立てた元本
+function investGain(monthly, years, annualRate){
+  return futureValue(0, monthly, years, annualRate) - monthly*12*years;
 }
 
 let chartA = null;
@@ -462,6 +479,27 @@ function recalc(){
     `純現金収支：<b>${netCash>=0?'＋':'−'}${yenC(Math.abs(netCash))}/月</b>`
     + `（投資にまわすぶんを除けば、保険料は <b>${freedMonthly>=0?'＋':'−'}${yenC(Math.abs(freedMonthly))}/月 軽くなる</b>）。`
     + `　控除の節税：<b>${taxDelta>=0?'＋':'−'}${yenC(Math.abs(taxDelta))}/年</b>。`;
+
+  /* ====== 目先：解約で減る控除を、浮いた保険料の運用益でカバーできるか（概算・社長要望） ====== */
+  const lossPerYear = Math.max(0, -taxDelta);   // 控除で減る節税/年（解約のコスト・＋なら損なし）
+  const cap = Math.max(0, freedMonthly);        // 浮いた保険料（月）を運用の原資に
+  $('g5_5').textContent  = '+'+yenC(investGain(cap,5,0.05));
+  $('g5_10').textContent = '+'+yenC(investGain(cap,10,0.05));
+  $('g7_5').textContent  = '+'+yenC(investGain(cap,5,0.07));
+  $('g7_10').textContent = '+'+yenC(investGain(cap,10,0.07));
+  if(lossPerYear>0)
+    $('coverLoss').innerHTML = `解約で減る節税（控除）：<b style="color:var(--bad)">−${yenC(lossPerYear)}/年</b> ＝ 累計 5年で −${yenC(lossPerYear*5)}／10年で −${yenC(lossPerYear*10)}`;
+  else
+    $('coverLoss').innerHTML = `この設定では控除の節税は減りません（むしろ増えています）。カバーの必要はありません。`;
+  const beYear = r => { for(let y=1;y<=40;y++){ if(investGain(cap,y,r) >= lossPerYear*y) return y; } return null; };
+  if(cap<=0)
+    $('coverConclusion').innerHTML = '学資／個人年金を「解約」にすると、浮いた保険料の運用益と控除の損を比べられます。';
+  else if(lossPerYear<=0)
+    $('coverConclusion').innerHTML = '控除の損がないので、上の運用益はまるごとプラスです。';
+  else {
+    const b5=beYear(0.05), b7=beYear(0.07);
+    $('coverConclusion').innerHTML = `→ 控除で減る節税は、浮いた保険料の運用益が <b>年5%なら約${b5?b5:'40+'}年・年7%なら約${b7?b7:'40+'}年</b>で追い越します。以降はずっとプラス。`;
+  }
 
   // 振替先ヒント
   $('destHint').textContent = knob.dest==='nisa'
